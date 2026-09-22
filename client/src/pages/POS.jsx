@@ -1,2 +1,466 @@
-import {useEffect,useMemo,useState} from 'react';import {Search,Plus,Minus,Trash2,ReceiptText} from 'lucide-react';import {api} from '../services/api';import PageHead from '../components/common/PageHead';import Empty from '../components/common/Empty';import Receipt from '../components/pos/Receipt';import {money} from '../utils/format';
-export default function POS(){const[products,setProducts]=useState([]);const[q,setQ]=useState('');const[cart,setCart]=useState([]);const[payment,setPayment]=useState('CASH');const[discount,setDiscount]=useState(0);const[busy,setBusy]=useState(false);const[result,setResult]=useState(null);const[error,setError]=useState('');useEffect(()=>{api('/products').then(setProducts).catch(e=>setError(e.message))},[]);const filtered=products.filter(p=>`${p.name} ${p.sku}`.toLowerCase().includes(q.toLowerCase()));const add=p=>setCart(c=>{const hit=c.find(x=>x.productId===p._id);if(hit){if(hit.quantity>=p.stock)return c;return c.map(x=>x.productId===p._id?{...x,quantity:x.quantity+1}:x)}return[...c,{productId:p._id,name:p.name,price:p.sellingPrice,quantity:1,image:p.image?.url,stock:p.stock}]});const update=(id,d)=>setCart(c=>c.map(x=>x.productId===id?{...x,quantity:Math.max(0,Math.min(x.stock,x.quantity+d))}:x).filter(x=>x.quantity));const subtotal=useMemo(()=>cart.reduce((a,x)=>a+x.price*x.quantity,0),[cart]);const total=Math.max(0,subtotal-Number(discount||0));const checkout=async()=>{if(!cart.length)return;setBusy(true);setError('');try{const data=await api('/sales',{method:'POST',body:JSON.stringify({items:cart.map(x=>({productId:x.productId,quantity:x.quantity})),discount:Number(discount||0),tax:0,paymentMethod:payment})});setResult(data);setCart([]);setProducts(await api('/products'))}catch(e){setError(e.message)}finally{setBusy(false)}};return <><PageHead eyebrow="POINT OF SALE" title="Checkout" subtitle="Fast counter workflow with live stock." action={<span className="live-pill"><i/>Live inventory</span>}/>{error&&<div className="error">{error}</div>}<div className="pos-layout"><section className="card pos-products"><div className="search-field"><Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Scan SKU or search product…"/></div><div className="product-grid compact">{filtered.map(p=><button className="pos-product" key={p._id} disabled={p.stock<=0} onClick={()=>add(p)}><div className="product-image">{p.image?.url?<img src={p.image.url} alt=""/>:<ReceiptText size={28}/>}<span>{p.stock} left</span></div><b>{p.name}</b><small>{money(p.sellingPrice)}</small></button>)}{!filtered.length&&<Empty text="No products found."/>}</div></section><aside className="card cart"><div className="section-head"><div><h3>Current cart</h3><small>{cart.length} products</small></div>{cart.length>0&&<button className="text-link" onClick={()=>setCart([])}>Clear</button>}</div><div className="cart-list">{cart.map(x=><div className="cart-row" key={x.productId}><div className="thumb">{x.image?<img src={x.image} alt=""/>:<ReceiptText size={15}/>}</div><div className="cart-name"><b>{x.name}</b><small>{money(x.price)} each</small></div><div className="qty"><button onClick={()=>update(x.productId,-1)}><Minus size={12}/></button><span>{x.quantity}</span><button onClick={()=>update(x.productId,1)}><Plus size={12}/></button></div><b>{money(x.price*x.quantity)}</b><button className="icon-only" onClick={()=>setCart(c=>c.filter(i=>i.productId!==x.productId))}><Trash2 size={13}/></button></div>)}{!cart.length&&<Empty text="Add products to start a sale."/>}</div><div className="checkout"><div className="form-grid"><label>Payment<select className="input" value={payment} onChange={e=>setPayment(e.target.value)}><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="CREDIT">Credit</option></select></label><label>Discount<input className="input" type="number" min="0" value={discount} onChange={e=>setDiscount(e.target.value)}/></label></div><div className="total-line"><span>Total</span><strong>{money(total)}</strong></div><button className="primary full" disabled={!cart.length||busy} onClick={checkout}>{busy?'Processing…':'Complete sale'}</button></div></aside></div><Receipt result={result} onClose={()=>setResult(null)}/></>}
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  ReceiptText
+} from 'lucide-react';
+
+import { api } from '../services/api';
+import PageHead from '../components/common/PageHead';
+import Empty from '../components/common/Empty';
+import Receipt from '../components/pos/Receipt';
+import { money } from '../utils/format';
+
+export default function POS() {
+  const [products, setProducts] = useState([]);
+  const [q, setQ] = useState('');
+  const [cart, setCart] = useState([]);
+
+  const [payment, setPayment] = useState('CASH');
+  const [discount, setDiscount] = useState(0);
+
+  // Customer details
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/products')
+      .then(setProducts)
+      .catch(e => setError(e.message));
+  }, []);
+
+  const filtered = products.filter(p =>
+    `${p.name} ${p.sku}`
+      .toLowerCase()
+      .includes(q.toLowerCase())
+  );
+
+  const add = p =>
+    setCart(c => {
+      const hit = c.find(x => x.productId === p._id);
+
+      if (hit) {
+        if (hit.quantity >= p.stock) return c;
+
+        return c.map(x =>
+          x.productId === p._id
+            ? {
+                ...x,
+                quantity: x.quantity + 1
+              }
+            : x
+        );
+      }
+
+      return [
+        ...c,
+        {
+          productId: p._id,
+          name: p.name,
+          price: p.sellingPrice,
+          quantity: 1,
+          image: p.image?.url,
+          stock: p.stock
+        }
+      ];
+    });
+
+  const update = (id, d) =>
+    setCart(c =>
+      c
+        .map(x =>
+          x.productId === id
+            ? {
+                ...x,
+                quantity: Math.max(
+                  0,
+                  Math.min(x.stock, x.quantity + d)
+                )
+              }
+            : x
+        )
+        .filter(x => x.quantity)
+    );
+
+  const subtotal = useMemo(
+    () =>
+      cart.reduce(
+        (a, x) => a + x.price * x.quantity,
+        0
+      ),
+    [cart]
+  );
+
+  const total = Math.max(
+    0,
+    subtotal - Number(discount || 0)
+  );
+
+  const checkout = async () => {
+    if (!cart.length) return;
+
+    // Customer validation
+    if (!customerName.trim()) {
+      setError('Customer name is required.');
+      return;
+    }
+
+    if (!customerPhone.trim()) {
+      setError('Customer phone number is required.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const data = await api('/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: cart.map(x => ({
+            productId: x.productId,
+            quantity: x.quantity
+          })),
+
+          discount: Number(discount || 0),
+
+          tax: 0,
+
+          paymentMethod: payment,
+
+          // Customer snapshot
+          customer: {
+            name: customerName.trim(),
+            phone: customerPhone.trim(),
+            address: customerAddress.trim()
+          }
+        })
+      });
+
+      setResult(data);
+
+      // Clear cart
+      setCart([]);
+
+      // Clear customer details
+      setCustomerName('');
+      setCustomerPhone('');
+      setCustomerAddress('');
+
+      setDiscount(0);
+      setPayment('CASH');
+
+      // Refresh products
+      setProducts(await api('/products'));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHead
+        eyebrow="POINT OF SALE"
+        title="Checkout"
+        subtitle="Fast counter workflow with live stock."
+        action={
+          <span className="live-pill">
+            <i />
+            Live inventory
+          </span>
+        }
+      />
+
+      {error && (
+        <div className="error">
+          {error}
+        </div>
+      )}
+
+      <div className="pos-layout">
+        {/* PRODUCTS */}
+        <section className="card pos-products">
+          <div className="search-field">
+            <Search size={16} />
+
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Scan SKU or search product…"
+            />
+          </div>
+
+          <div className="product-grid compact">
+            {filtered.map(p => (
+              <button
+                className="pos-product"
+                key={p._id}
+                disabled={p.stock <= 0}
+                onClick={() => add(p)}
+              >
+                <div className="product-image">
+                  {p.image?.url ? (
+                    <img
+                      src={p.image.url}
+                      alt=""
+                    />
+                  ) : (
+                    <ReceiptText size={28} />
+                  )}
+
+                  <span>
+                    {p.stock} left
+                  </span>
+                </div>
+
+                <b>{p.name}</b>
+
+                <small>
+                  {money(p.sellingPrice)}
+                </small>
+              </button>
+            ))}
+
+            {!filtered.length && (
+              <Empty text="No products found." />
+            )}
+          </div>
+        </section>
+
+        {/* CART */}
+        <aside className="card cart">
+          <div className="section-head">
+            <div>
+              <h3>Current cart</h3>
+
+              <small>
+                {cart.length} products
+              </small>
+            </div>
+
+            {cart.length > 0 && (
+              <button
+                className="text-link"
+                onClick={() => setCart([])}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="cart-list">
+            {cart.map(x => (
+              <div
+                className="cart-row"
+                key={x.productId}
+              >
+                <div className="thumb">
+                  {x.image ? (
+                    <img
+                      src={x.image}
+                      alt=""
+                    />
+                  ) : (
+                    <ReceiptText size={15} />
+                  )}
+                </div>
+
+                <div className="cart-name">
+                  <b>{x.name}</b>
+
+                  <small>
+                    {money(x.price)} each
+                  </small>
+                </div>
+
+                <div className="qty">
+                  <button
+                    onClick={() =>
+                      update(x.productId, -1)
+                    }
+                  >
+                    <Minus size={12} />
+                  </button>
+
+                  <span>
+                    {x.quantity}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      update(x.productId, 1)
+                    }
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+
+                <b>
+                  {money(
+                    x.price * x.quantity
+                  )}
+                </b>
+
+                <button
+                  className="icon-only"
+                  onClick={() =>
+                    setCart(c =>
+                      c.filter(
+                        i =>
+                          i.productId !==
+                          x.productId
+                      )
+                    )
+                  }
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+
+            {!cart.length && (
+              <Empty text="Add products to start a sale." />
+            )}
+          </div>
+
+          {/* CUSTOMER DETAILS */}
+          <div className="checkout">
+            <div className="section-head">
+              <div>
+                <h3>Customer details</h3>
+
+                <small>
+                  Name & phone required • Address optional
+                </small>
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <label>
+                Customer Name
+                <input
+                  className="input"
+                  type="text"
+                  value={customerName}
+                  onChange={e =>
+                    setCustomerName(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter customer name"
+                />
+              </label>
+
+              <label>
+                Phone Number
+                <input
+                  className="input"
+                  type="tel"
+                  value={customerPhone}
+                  onChange={e =>
+                    setCustomerPhone(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter phone number"
+                />
+              </label>
+
+              <label className="full">
+                Address
+                <textarea
+                  className="input"
+                  rows="2"
+                  value={customerAddress}
+                  onChange={e =>
+                    setCustomerAddress(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter address (optional)"
+                />
+              </label>
+            </div>
+
+            {/* PAYMENT */}
+            <div className="form-grid">
+              <label>
+                Payment
+                <select
+                  className="input"
+                  value={payment}
+                  onChange={e =>
+                    setPayment(e.target.value)
+                  }
+                >
+                  <option value="CASH">
+                    Cash
+                  </option>
+
+                  <option value="UPI">
+                    UPI
+                  </option>
+
+                  <option value="CARD">
+                    Card
+                  </option>
+
+                  <option value="CREDIT">
+                    Credit
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                Discount
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={discount}
+                  onChange={e =>
+                    setDiscount(e.target.value)
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="total-line">
+              <span>Total</span>
+
+              <strong>
+                {money(total)}
+              </strong>
+            </div>
+
+            <button
+              className="primary full"
+              disabled={
+                !cart.length || busy
+              }
+              onClick={checkout}
+            >
+              {busy
+                ? 'Processing…'
+                : 'Complete sale'}
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <Receipt
+        result={result}
+        onClose={() => setResult(null)}
+      />
+    </>
+  );
+}
