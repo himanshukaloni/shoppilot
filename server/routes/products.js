@@ -1,0 +1,2 @@
+import {Router} from 'express';import multer from 'multer';import {list,getOne,create,update,remove,history} from '../controllers/product.js';
+const r=Router();const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024}});r.get('/',list);r.get('/:id',getOne);r.get('/:id/history',history);r.post('/',upload.single('image'),create);r.put('/:id',upload.single('image'),update);r.delete('/:id',remove);export default r;

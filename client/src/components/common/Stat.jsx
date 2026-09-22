@@ -1,0 +1,1 @@
+export default function Stat({title,value,icon:Icon,meta='Live'}){return <div className="stat card"><div className="stat-top"><div className="stat-icon"><Icon size={18}/></div><span className="stat-meta">{meta}</span></div><small>{title}</small><strong>{value}</strong></div>}

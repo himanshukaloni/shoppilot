@@ -1,0 +1,2 @@
+import {LayoutDashboard,Package,ShoppingCart,Boxes,Truck,Users,ReceiptText,BarChart3,Settings} from 'lucide-react';
+export const navigation=[['Dashboard','/',LayoutDashboard],['Products','/products',Package],['POS / Sales','/pos',ShoppingCart],['Inventory','/inventory',Boxes],['Purchases','/purchases',Truck],['Customers','/customers',Users],['Expenses','/expenses',ReceiptText],['Reports','/reports',BarChart3],['Settings','/settings',Settings]];

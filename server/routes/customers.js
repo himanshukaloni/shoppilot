@@ -1,0 +1,1 @@
+import {Router} from 'express';import {list,create,update,remove,history} from '../controllers/customer.js';const r=Router();r.get('/',list);r.post('/',create);r.put('/:id',update);r.delete('/:id',remove);r.get('/:id/history',history);export default r;
